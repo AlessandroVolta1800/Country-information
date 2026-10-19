@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08111d">
+  <title>Atlas — Interactive Globe</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08111d;
+      --panel: rgba(14, 26, 42, .88);
+      --panel-strong: #111f31;
+      --line: rgba(172, 202, 228, .12);
+      --muted: #8193a9;
+      --text: #edf5ff;
+      --accent: #7ce0c3;
+      --blue: #85b8ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at 52% 43%, rgba(37, 94, 120, .13), transparent 38%),
+        radial-gradient(ellipse at 15% 100%, rgba(25, 66, 92, .12), transparent 44%),
+        var(--bg);
+      color: var(--text);
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100vh;
+      min-height: 540px;
+      padding: 0 28px 20px;
+    }
+
+    .topbar {
+      display: flex;
+      flex: 0 0 82px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand-mark {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border: 1px solid rgba(124, 224, 195, .3);
+      border-radius: 12px;
+      background: rgba(124, 224, 195, .08);
+      color: var(--accent);
+    }
+    .brand-mark svg { width: 23px; height: 23px; }
+    .brand-title { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: .12em; }
+    .brand-subtitle { margin-top: 2px; color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+    .top-meta { display: flex; align-items: center; gap: 20px; color: var(--muted); font-size: 12px; }
+    .live-dot { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px rgba(124, 224, 195, .8); }
+
+    .workspace {
+      display: grid;
+      flex: 1;
+      min-height: 0;
+      grid-template-columns: 278px minmax(320px, 1fr) 306px;
+      gap: 18px;
+      padding-top: 18px;
+    }
+
+    .panel {
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .13);
+      backdrop-filter: blur(16px);
+    }
+
+    .countries-panel { display: flex; flex-direction: column; }
+    .panel-heading { padding: 19px 18px 14px; }
+    .eyebrow { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    .panel-title { display: flex; align-items: baseline; justify-content: space-between; margin: 5px 0 0; font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+    .count-label { color: var(--muted); font-size: 11px; font-weight: 500; }
+
+    .search-wrap { position: relative; padding: 0 14px 12px; }
+    .search-icon { position: absolute; top: 10px; left: 26px; width: 15px; height: 15px; color: #8295a9; pointer-events: none; }
+    .search-input {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid rgba(172, 202, 228, .13);
+      border-radius: 9px;
+      outline: none;
+      background: rgba(4, 12, 21, .44);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .search-input::placeholder { color: #6f8196; }
+    .search-input:focus { border-color: rgba(124, 224, 195, .55); box-shadow: 0 0 0 3px rgba(124, 224, 195, .08); }
+    .filter-row { display: flex; align-items: center; gap: 8px; padding: 0 14px 12px; }
+    .region-select {
+      width: 100%;
+      height: 33px;
+      padding: 0 10px;
+      border: 1px solid rgba(172, 202, 228, .12);
+      border-radius: 8px;
+      outline: none;
+      background: #111f31;
+      color: #b9c7d7;
+      font-size: 11px;
+    }
+
+    .country-list { flex: 1; overflow: auto; padding: 0 8px 10px; scrollbar-color: #314459 transparent; scrollbar-width: thin; }
+    .country-row {
+      display: flex;
+      width: 100%;
+      min-height: 45px;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 9px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+    .country-row:hover, .country-row:focus-visible { outline: none; background: rgba(128, 172, 213, .09); }
+    .country-row.active { background: rgba(124, 224, 195, .12); }
+    .row-flag { display: grid; width: 27px; height: 27px; flex: 0 0 27px; place-items: center; border: 1px solid rgba(190, 215, 239, .1); border-radius: 8px; background: rgba(255, 255, 255, .035); font-size: 15px; }
+    .row-copy { min-width: 0; flex: 1; }
+    .row-name { display: block; overflow: hidden; color: #dce8f5; font-size: 12px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+    .row-region { display: block; margin-top: 1px; color: #788da4; font-size: 10px; }
+    .row-code { color: #6f8298; font-size: 10px; letter-spacing: .08em; }
+    .empty-state { padding: 25px 12px; color: var(--muted); font-size: 12px; text-align: center; }
+
+    .globe-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+    .stage-label { position: absolute; z-index: 2; top: 9px; left: 12px; color: #8295a9; font-size: 10px; letter-spacing: .13em; text-transform: uppercase; pointer-events: none; }
+    .stage-label strong { color: #c9d8e8; font-weight: 600; }
+    #globe {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      touch-action: none;
+    }
+    #globe.dragging { cursor: grabbing; }
+    #globe.country-hover { cursor: pointer; }
+
+    .globe-controls {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      left: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    .control-group { display: flex; gap: 6px; padding: 5px; border: 1px solid var(--line); border-radius: 11px; background: rgba(8, 17, 29, .78); backdrop-filter: blur(12px); pointer-events: auto; }
+    .control-button {
+      display: grid;
+      width: 32px;
+      height: 31px;
+      place-items: center;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: #adbed0;
+      cursor: pointer;
+    }
+    .control-button:hover, .control-button:focus-visible { outline: none; background: rgba(142, 181, 215, .12); color: #fff; }
+    .control-button svg { width: 16px; height: 16px; }
+    .spin-control { display: flex; width: auto; gap: 8px; padding: 0 10px; color: #a8b9ca; font-size: 11px; }
+    .spin-control.active { color: var(--accent); }
+    .hint { color: #74899f; font-size: 10px; }
+    .tooltip {
+      position: absolute;
+      z-index: 3;
+      display: none;
+      padding: 7px 10px;
+      border: 1px solid rgba(180, 211, 238, .17);
+      border-radius: 8px;
+      background: rgba(7, 15, 26, .9);
+      color: #e9f4ff;
+      font-size: 11px;
+      pointer-events: none;
+      transform: translate(12px, 12px);
+      backdrop-filter: blur(10px);
+    }
+
+    .detail-panel { display: flex; flex-direction: column; overflow-y: auto; scrollbar-color: #314459 transparent; scrollbar-width: thin; }
+    .detail-top { display: flex; align-items: flex-start; justify-content: space-between; padding: 19px 18px 15px; }
+    .detail-top .eyebrow { margin-top: 3px; }
+    .detail-code { padding: 5px 8px; border: 1px solid rgba(133, 184, 255, .2); border-radius: 6px; background: rgba(133, 184, 255, .07); color: var(--blue); font-size: 10px; font-weight: 650; letter-spacing: .09em; }
+    .detail-top-main { display: flex; min-width: 0; align-items: center; gap: 8px; }
+    .expand-button { display: inline-grid; width: 27px; height: 27px; flex: 0 0 27px; place-items: center; border: 1px solid rgba(172, 202, 228, .13); border-radius: 7px; background: rgba(255, 255, 255, .025); color: #9aadc1; cursor: pointer; transition: color .15s ease, border-color .15s ease, background .15s ease; }
+    .expand-button:hover, .expand-button:focus-visible { outline: none; border-color: rgba(124, 224, 195, .4); background: rgba(124, 224, 195, .08); color: var(--accent); }
+    .expand-button svg { width: 14px; height: 14px; }
+    .country-hero { padding: 5px 18px 20px; }
+    .hero-line { display: flex; align-items: center; gap: 12px; }
+    .hero-flag { display: grid; width: 47px; height: 47px; flex: 0 0 47px; place-items: center; border: 1px solid rgba(190, 215, 239, .12); border-radius: 13px; background: rgba(255, 255, 255, .035); font-size: 25px; }
+    .hero-name { margin: 0; font-size: 22px; font-weight: 620; letter-spacing: -.04em; line-height: 1.14; }
+    .hero-official { margin: 6px 0 0; color: var(--muted); font-size: 10px; line-height: 1.4; }
+    .region-tag { display: inline-flex; align-items: center; gap: 7px; margin-top: 14px; padding: 5px 9px; border: 1px solid rgba(124, 224, 195, .18); border-radius: 20px; background: rgba(124, 224, 195, .06); color: #9bdac9; font-size: 10px; }
+    .region-tag::before { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); content: ""; }
+
+    .stat-card { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; padding: 0 14px 17px; }
+    .stat { min-height: 70px; padding: 11px; border: 1px solid rgba(172, 202, 228, .09); border-radius: 10px; background: rgba(255, 255, 255, .025); }
+    .stat-label { color: #7f92a8; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+    .stat-value { overflow: hidden; margin-top: 7px; color: #e4effb; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .stat-value.small { font-size: 11px; }
+    .detail-section { padding: 14px 18px; border-top: 1px solid var(--line); }
+    .section-label { margin: 0 0 8px; color: #8194a9; font-size: 9px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    .section-value { margin: 0; color: #d5e1ed; font-size: 12px; }
+    .energy-section { flex: 0 0 auto; padding: 14px 14px 15px; border-top: 1px solid var(--line); }
+    .energy-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .energy-heading-main { display: flex; min-width: 0; align-items: center; gap: 7px; }
+    .energy-heading .section-label { margin-bottom: 5px; }
+    .energy-total { color: #e6f0fc; font-size: 18px; font-weight: 650; letter-spacing: -.03em; }
+    .energy-year { padding: 4px 6px; border: 1px solid rgba(133, 184, 255, .16); border-radius: 6px; color: #92add0; font-size: 9px; white-space: nowrap; }
+    .energy-units { margin-top: 2px; color: #758ba1; font-size: 9px; }
+    .energy-overview { display: grid; grid-template-columns: 108px minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 10px; }
+    .energy-donut { display: block; width: 108px; height: 108px; overflow: visible; }
+    .energy-donut-track { fill: none; stroke: rgba(152, 176, 199, .12); stroke-width: 14; }
+    .energy-donut-segments circle { fill: none; stroke-width: 14; }
+    .energy-donut-value { fill: #eaf5ff; font-size: 18px; font-weight: 700; text-anchor: middle; }
+    .energy-donut-label { fill: #8ba0b6; font-size: 8px; letter-spacing: .04em; text-anchor: middle; }
+    .energy-totals { display: grid; gap: 7px; }
+    .energy-total-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 7px 8px; border: 1px solid rgba(172, 202, 228, .09); border-radius: 8px; background: rgba(255, 255, 255, .025); }
+    .energy-total-name { display: flex; align-items: center; gap: 6px; color: #aebed0; font-size: 9px; }
+    .energy-swatch { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--swatch); }
+    .energy-total-value { color: #e4effb; font-size: 12px; font-weight: 650; }
+    .energy-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+    .energy-group { min-width: 0; }
+    .energy-group-title { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; margin-bottom: 5px; color: #a8bacd; font-size: 9px; font-weight: 650; }
+    .energy-group-title strong { color: #d5e5f4; font-size: 10px; }
+    .energy-category-list { display: grid; gap: 4px; }
+    .energy-category { display: flex; min-width: 0; align-items: center; gap: 5px; color: #9aadc1; font-size: 9px; line-height: 1.35; }
+    .energy-category-name { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
+    .energy-category-share { color: #d5e1ee; font-variant-numeric: tabular-nums; }
+    .energy-unavailable { margin: 11px 0 0; padding: 9px 10px; border: 1px solid rgba(172, 202, 228, .09); border-radius: 8px; background: rgba(255, 255, 255, .025); color: #9aadc1; font-size: 10px; line-height: 1.5; }
+    .energy-source { margin: 9px 0 0; color: #71859b; font-size: 9px; line-height: 1.45; }
+    .energy-source a { color: #92b6d5; text-decoration: underline; text-decoration-color: rgba(146, 182, 213, .35); text-underline-offset: 2px; }
+    .energy-source a:hover { color: #c6e5ff; }
+    .expand-dialog { width: min(900px, calc(100vw - 36px)); max-width: none; max-height: min(84vh, 900px); padding: 0; overflow: visible; border: 1px solid rgba(172, 202, 228, .18); border-radius: 18px; background: transparent; color: var(--text); box-shadow: 0 30px 120px rgba(0, 0, 0, .6); }
+    .expand-dialog::backdrop { background: rgba(2, 8, 15, .76); backdrop-filter: blur(7px); }
+    .expand-dialog-card { display: flex; max-height: min(84vh, 900px); flex-direction: column; overflow: hidden; border-radius: 17px; background: linear-gradient(150deg, rgba(20, 36, 55, .98), rgba(9, 18, 30, .99)); }
+    .expand-dialog-header { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 23px 28px 18px; border-bottom: 1px solid var(--line); }
+    .expand-dialog-kicker { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    .expand-dialog-title { margin: 5px 0 0; font-size: 25px; font-weight: 650; letter-spacing: -.04em; }
+    .expand-dialog-subtitle { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+    .expand-dialog-close { display: grid; width: 35px; height: 35px; flex: 0 0 35px; place-items: center; border: 1px solid rgba(172, 202, 228, .14); border-radius: 9px; background: rgba(255, 255, 255, .035); color: #b9c9d9; font-size: 19px; line-height: 1; cursor: pointer; }
+    .expand-dialog-close:hover, .expand-dialog-close:focus-visible { outline: none; border-color: rgba(124, 224, 195, .4); color: var(--accent); }
+    .expand-dialog-content { min-height: 0; overflow: auto; padding: 24px 28px 28px; scrollbar-color: #314459 transparent; scrollbar-width: thin; }
+    .expanded-profile-hero { display: flex; align-items: center; gap: 17px; padding-bottom: 22px; }
+    .expanded-profile-flag { display: grid; width: 70px; height: 70px; flex: 0 0 70px; place-items: center; border: 1px solid rgba(190, 215, 239, .13); border-radius: 18px; background: rgba(255, 255, 255, .035); font-size: 38px; }
+    .expanded-profile-name { margin: 0; font-size: 31px; font-weight: 650; letter-spacing: -.045em; line-height: 1.1; }
+    .expanded-profile-official { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+    .expanded-profile-region { display: inline-flex; align-items: center; gap: 7px; margin-top: 11px; padding: 5px 9px; border: 1px solid rgba(124, 224, 195, .18); border-radius: 20px; background: rgba(124, 224, 195, .06); color: #9bdac9; font-size: 11px; }
+    .expanded-profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+    .expanded-fact { min-width: 0; padding: 15px 16px; border: 1px solid rgba(172, 202, 228, .1); border-radius: 11px; background: rgba(255, 255, 255, .025); }
+    .expanded-fact-label { color: #8194a9; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .expanded-fact-value { overflow-wrap: anywhere; margin-top: 7px; color: #e4effb; font-size: 15px; font-weight: 550; }
+    .expanded-fact-wide { grid-column: 1 / -1; }
+    .expanded-border-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .expanded-energy-summary { display: grid; grid-template-columns: minmax(240px, .9fr) minmax(280px, 1.1fr); align-items: center; gap: 24px; padding-bottom: 23px; border-bottom: 1px solid var(--line); }
+    .expanded-energy-hero { display: flex; align-items: center; gap: 18px; }
+    .expanded-energy-total { color: #edf5ff; font-size: 26px; font-weight: 700; letter-spacing: -.04em; }
+    .expanded-energy-units { margin-top: 4px; color: #8194a9; font-size: 12px; }
+    .expanded-energy-donut { display: block; width: 192px; height: 192px; flex: 0 0 192px; }
+    .expanded-energy-donut .energy-donut-track { stroke-width: 16; }
+    .expanded-energy-donut > circle:not(.energy-donut-track) { fill: none; stroke-width: 16; }
+    .expanded-energy-donut .energy-donut-value { font-size: 25px; }
+    .expanded-energy-donut .energy-donut-label { font-size: 9px; }
+    .expanded-energy-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .expanded-energy-total-card { padding: 14px 15px; border: 1px solid rgba(172, 202, 228, .1); border-radius: 11px; background: rgba(255, 255, 255, .025); }
+    .expanded-energy-total-card .energy-total-name { font-size: 11px; }
+    .expanded-energy-total-card .energy-total-value { display: block; margin-top: 8px; font-size: 20px; }
+    .expanded-energy-breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding-top: 20px; }
+    .expanded-energy-group { min-width: 0; padding: 16px 17px; border: 1px solid rgba(172, 202, 228, .1); border-radius: 12px; background: rgba(255, 255, 255, .025); }
+    .expanded-energy-group .energy-group-title { margin-bottom: 12px; color: #cfdeed; font-size: 12px; }
+    .expanded-energy-group .energy-group-title strong { font-size: 13px; }
+    .expanded-energy-group .energy-category-list { gap: 9px; }
+    .expanded-energy-group .energy-category { gap: 8px; font-size: 11px; }
+    .expanded-energy-group .energy-swatch { width: 9px; height: 9px; flex-basis: 9px; }
+    .expanded-energy-group .energy-category-name { color: #b8c8d8; }
+    .expanded-energy-group .energy-category-share { font-size: 11px; }
+    .expanded-energy-note { margin: 16px 0 0; color: #8297ad; font-size: 11px; line-height: 1.55; }
+    .expanded-energy-note a { color: #92b6d5; text-decoration: underline; text-underline-offset: 2px; }
+    .border-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .border-chip { padding: 4px 7px; border: 1px solid rgba(172, 202, 228, .13); border-radius: 6px; background: rgba(255, 255, 255, .025); color: #b9c9d9; font-size: 10px; cursor: pointer; }
+    .border-chip:hover, .border-chip:focus-visible { outline: none; border-color: rgba(124, 224, 195, .45); color: var(--accent); }
+    .detail-spacer { flex: 1; }
+    .data-note { padding: 12px 18px 15px; border-top: 1px solid var(--line); color: #687d93; font-size: 9px; line-height: 1.5; }
+
+    @media (max-width: 1120px) {
+      .workspace { grid-template-columns: 250px minmax(280px, 1fr) 270px; gap: 12px; }
+      .app { padding-right: 18px; padding-left: 18px; }
+      .hint { display: none; }
+    }
+    @media (max-width: 880px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100vh; padding: 0 14px 14px; }
+      .topbar { flex-basis: 68px; }
+      .top-meta { gap: 10px; }
+      .workspace { grid-template-columns: minmax(0, 1fr) minmax(260px, .85fr); grid-template-rows: minmax(450px, 58vh) minmax(390px, auto); }
+      .globe-stage { grid-column: 1 / -1; grid-row: 1; }
+      .countries-panel, .detail-panel { grid-row: 2; }
+    }
+    @media (max-width: 580px) {
+      .app { padding-right: 10px; padding-left: 10px; }
+      .brand-title { font-size: 13px; }
+      .brand-subtitle { font-size: 9px; }
+      .top-meta { font-size: 10px; }
+      .top-meta .dataset-label { display: none; }
+      .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(410px, 54vh) 390px auto; gap: 10px; }
+      .globe-stage { grid-column: 1; grid-row: 1; }
+      .countries-panel { grid-row: 2; }
+      .detail-panel { grid-row: 3; min-height: 420px; }
+      .globe-controls { right: 8px; bottom: 8px; left: 8px; }
+      .stage-label { top: 4px; left: 5px; }
+    }
+    @media (max-width: 600px) {
+      .expand-dialog { width: calc(100vw - 20px); max-height: 90vh; }
+      .expand-dialog-card { max-height: 90vh; }
+      .expand-dialog-header { padding: 18px 18px 15px; }
+      .expand-dialog-title { font-size: 21px; }
+      .expand-dialog-content { padding: 18px; }
+      .expanded-profile-name { font-size: 24px; }
+      .expanded-profile-flag { width: 58px; height: 58px; flex-basis: 58px; font-size: 31px; }
+      .expanded-profile-grid { grid-template-columns: 1fr; gap: 8px; }
+      .expanded-fact-wide { grid-column: auto; }
+      .expanded-energy-summary { grid-template-columns: 1fr; gap: 16px; }
+      .expanded-energy-hero { justify-content: center; }
+      .expanded-energy-donut { width: 164px; height: 164px; flex-basis: 164px; }
+      .expanded-energy-totals { grid-template-columns: 1fr 1fr; }
+      .expanded-energy-breakdown { grid-template-columns: 1fr; gap: 9px; padding-top: 12px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.3" stroke="currentColor" stroke-width="1.25"/><path d="M12 3.7v2.1M12 18.2v2.1M3.7 12h2.1m12.4 0h2.1" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><path d="m14.8 9.2-1.7 4-3.9 1.6 1.6-4 4-1.6Z" fill="currentColor" fill-opacity=".65" stroke="currentColor" stroke-width=".8" stroke-linejoin="round"/></svg>
+        </div>
+        <div>
+          <h1 class="brand-title">ATLAS</h1>
+          <div class="brand-subtitle">The living world</div>
+        </div>
+      </div>
+      <div class="top-meta">
+        <span><span class="live-dot"></span>Explore mode</span>
+        <span class="dataset-label">COUNTRIES &amp; TERRITORIES&nbsp; / &nbsp;50M</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="panel countries-panel" aria-label="Country explorer">
+        <div class="panel-heading">
+          <div class="eyebrow">Directory</div>
+          <h2 class="panel-title">Countries &amp; territories <span class="count-label" id="country-count">—</span></h2>
+        </div>
+        <label class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.7" stroke="currentColor" stroke-width="1.5"/><path d="m13 13 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <input class="search-input" id="search" type="search" placeholder="Find a country..." autocomplete="off" aria-label="Search countries">
+        </label>
+        <div class="filter-row">
+          <select class="region-select" id="region-filter" aria-label="Filter by region">
+            <option value="">All regions</option>
+          </select>
+        </div>
+        <div class="country-list" id="country-list" role="listbox" aria-label="Countries"></div>
+      </aside>
+
+      <section class="globe-stage" aria-label="Interactive globe">
+        <div class="stage-label"><strong>Earth</strong> &nbsp;·&nbsp; Orthographic view</div>
+        <canvas id="globe" aria-label="Interactive globe. Drag to rotate, scroll to zoom, and select a country."></canvas>
+        <div class="tooltip" id="tooltip" role="status"></div>
+        <div class="globe-controls">
+          <div class="control-group" aria-label="Globe zoom">
+            <button class="control-button" id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out"><svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+            <button class="control-button" id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 20 20" fill="none"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+            <button class="control-button" id="reset-view" type="button" aria-label="Reset globe view" title="Reset view"><svg viewBox="0 0 20 20" fill="none"><path d="M3.8 8a6.5 6.5 0 1 1 .4 4.6M3.8 4.4V8h3.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          </div>
+          <div class="control-group">
+            <button class="control-button spin-control active" id="spin-toggle" type="button" aria-pressed="true" title="Toggle automatic rotation">
+              <svg viewBox="0 0 20 20" fill="none"><path d="M3.3 7.3A7 7 0 0 1 15 4.4l1.6 1.5M16.7 12.7A7 7 0 0 1 5 15.6l-1.6-1.5M16.6 3.9v2.8h-2.8M3.4 16.1v-2.8h2.8" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span id="spin-label">Spin on</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel detail-panel" id="detail-panel" aria-label="Country information" aria-live="polite">
+        <div class="detail-top">
+          <div class="detail-top-main">
+            <div class="eyebrow">Country profile</div>
+            <button class="expand-button" id="expand-country" type="button" aria-label="Expand country profile" title="Expand country profile">
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M7 3.5H3.5V7M13 3.5h3.5V7M16.5 13v3.5H13M7 16.5H3.5V13M3.8 3.8l4 4m8.4-4-4 4m4 8.4-4-4m-8.4 4 4-4" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <span class="detail-code" id="detail-code">—</span>
+        </div>
+        <div class="country-hero">
+          <div class="hero-line">
+            <div class="hero-flag" id="hero-flag">🌐</div>
+            <div>
+              <h2 class="hero-name" id="hero-name">Select a country</h2>
+              <p class="hero-official" id="hero-official">Choose a country on the globe or in the directory.</p>
+            </div>
+          </div>
+          <div class="region-tag" id="region-tag" hidden></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat"><div class="stat-label">Population</div><div class="stat-value" id="population">—</div></div>
+          <div class="stat"><div class="stat-label">Land area</div><div class="stat-value" id="area">—</div></div>
+          <div class="stat"><div class="stat-label">Capital</div><div class="stat-value small" id="capital">—</div></div>
+          <div class="stat"><div class="stat-label">Currency</div><div class="stat-value small" id="currency">—</div></div>
+        </div>
+        <section class="energy-section" aria-label="Primary energy consumption">
+          <div class="energy-heading">
+            <div class="energy-heading-main">
+              <h3 class="section-label">Energy consumption</h3>
+              <button class="expand-button" id="expand-energy" type="button" aria-label="Expand energy consumption" title="Expand energy consumption">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M7 3.5H3.5V7M13 3.5h3.5V7M16.5 13v3.5H13M7 16.5H3.5V13M3.8 3.8l4 4m8.4-4-4 4m4 8.4-4-4m-8.4 4 4-4" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <div>
+              <div class="energy-total" id="energy-total">—</div>
+              <div class="energy-units">Primary energy · TWh</div>
+            </div>
+            <span class="energy-year" id="energy-year">—</span>
+          </div>
+          <div class="energy-overview" id="energy-overview" hidden>
+            <svg class="energy-donut" id="energy-donut" viewBox="0 0 108 108" role="img">
+              <circle class="energy-donut-track" cx="54" cy="54" r="42"></circle>
+              <g class="energy-donut-segments" id="energy-donut-segments" transform="rotate(-90 54 54)"></g>
+              <text class="energy-donut-value" id="energy-donut-value" x="54" y="53">—</text>
+              <text class="energy-donut-label" x="54" y="67">RENEWABLE</text>
+            </svg>
+            <div class="energy-totals">
+              <div class="energy-total-row"><span class="energy-total-name"><span class="energy-swatch" style="--swatch:#49c7a2"></span>Renewable</span><span class="energy-total-value" id="renewable-total">—</span></div>
+              <div class="energy-total-row"><span class="energy-total-name"><span class="energy-swatch" style="--swatch:#708198"></span>Non-renewable</span><span class="energy-total-value" id="nonrenewable-total">—</span></div>
+            </div>
+          </div>
+          <div class="energy-groups" id="energy-groups" hidden>
+            <div class="energy-group">
+              <div class="energy-group-title"><span>Renewables</span><strong id="renewable-group-total">—</strong></div>
+              <div class="energy-category-list" id="renewable-breakdown"></div>
+            </div>
+            <div class="energy-group">
+              <div class="energy-group-title"><span>Non-renewables</span><strong id="nonrenewable-group-total">—</strong></div>
+              <div class="energy-category-list" id="nonrenewable-breakdown"></div>
+            </div>
+          </div>
+          <p class="energy-unavailable" id="energy-unavailable" hidden></p>
+          <p class="energy-source" id="energy-method" hidden>Fuel shares are percentages of reported primary-energy use, not electricity generation. Nuclear is grouped as non-renewable.</p>
+          <p class="energy-source" id="energy-source"><a href="https://github.com/owid/energy-data" target="_blank" rel="noreferrer">Our World in Data · Energy dataset</a></p>
+        </section>
+        <section class="detail-section">
+          <h3 class="section-label">Languages</h3>
+          <p class="section-value" id="languages">—</p>
+        </section>
+        <section class="detail-section">
+          <h3 class="section-label">Bordering countries</h3>
+          <div class="border-list" id="borders"><span class="section-value">—</span></div>
+        </section>
+        <div class="detail-spacer"></div>
+        <div class="data-note">Country facts are for general reference. Map geometry: Natural Earth via world-atlas. Country facts: mledoze/countries. Population: World Bank; latest year shown. Energy totals and reported source mixes: Our World in Data / Energy Institute.</div>
+      </aside>
+    </main>
+    <dialog class="expand-dialog" id="expand-dialog" aria-labelledby="expand-dialog-title">
+      <div class="expand-dialog-card">
+        <div class="expand-dialog-header">
+          <div>
+            <div class="expand-dialog-kicker" id="expand-dialog-kicker"></div>
+            <h2 class="expand-dialog-title" id="expand-dialog-title"></h2>
+            <p class="expand-dialog-subtitle" id="expand-dialog-subtitle"></p>
+          </div>
+          <button class="expand-dialog-close" id="expand-dialog-close" type="button" aria-label="Close expanded view">×</button>
+        </div>
+        <div class="expand-dialog-content" id="expand-dialog-content"></div>
+      </div>
+    </dialog>
+  </div>
+
+  <script src="assets/d3-array.min.js"></script>
+  <script src="assets/d3-geo.min.js"></script>
+  <script src="assets/topojson-client.min.js"></script>
+  <script src="assets/world.js"></script>
+  <script src="assets/country-facts.js"></script>
+  <script src="assets/energy-data.js"></script>
+  <script>
+    (() => {
+      const canvas = document.getElementById("globe");
+      const context = canvas.getContext("2d");
+      const tooltip = document.getElementById("tooltip");
+      const expandDialog = document.getElementById("expand-dialog");
+      const expandDialogContent = document.getElementById("expand-dialog-content");
+      const countryList = document.getElementById("country-list");
+      const searchInput = document.getElementById("search");
+      const regionFilter = document.getElementById("region-filter");
+      const geometries = topojson.feature(worldTopology, worldTopology.objects.countries).features;
+      const aliases = { "N. Cyprus": "Northern Cyprus", "Indian Ocean Ter.": "British Indian Ocean Territory" };
+      const energyColors = {
+        "Coal": "#708198",
+        "Oil": "#e9a466",
+        "Natural gas": "#db8dba",
+        "Nuclear": "#b19af1",
+        "Hydropower": "#6fa9ff",
+        "Wind": "#69d3e5",
+        "Solar": "#ffd36a",
+        "Biofuels": "#b6e27e",
+        "Other renewables": "#49c7a2"
+      };
+      const countries = geometries.map(feature => {
+        const id = feature.id != null && Number.isFinite(Number(feature.id)) ? String(Number(feature.id)).padStart(3, "0") : "";
+        const mapName = feature.properties.name || "";
+        const facts = countryFacts[id] || countryFactsByName[mapName] || countryFactsByName[aliases[mapName]] || {};
+        return {
+          feature,
+          id,
+          name: facts.name || mapName || "Unknown country",
+          code: facts.code || "",
+          region: facts.region || "Other",
+          facts
+        };
+      }).sort((a, b) => a.name.localeCompare(b.name));
+      const byCode = new Map();
+      countries.forEach(country => {
+        if (country.code) byCode.set(country.code, country);
+        if (country.facts.alpha3) byCode.set(country.facts.alpha3, country);
+      });
+      const regionNames = [...new Set(countries.map(country => country.region))].sort();
+      const projection = d3.geoOrthographic().clipAngle(90).precision(.35);
+      const path = d3.geoPath(projection, context);
+      const graticule = d3.geoGraticule10();
+      const borderMesh = topojson.mesh(worldTopology, worldTopology.objects.countries, (a, b) => a !== b);
+      let selected = countries.find(country => country.code === "US") || countries[0];
+      const initialCentroid = d3.geoCentroid(selected.feature);
+      const defaultRotation = [...initialCentroid];
+      const rotation = [...defaultRotation];
+      let hovered = null;
+      let width = 0;
+      let height = 0;
+      let zoom = 1;
+      let spinning = true;
+      let dirty = true;
+      let dragging = false;
+      let movedDuringDrag = false;
+      let pointer = null;
+      let previousFrame = 0;
+      let expandedMode = null;
+
+      function resize() {
+        const bounds = canvas.getBoundingClientRect();
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        width = bounds.width;
+        height = bounds.height;
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        projection
+          .translate([width / 2, height / 2])
+          .scale(Math.max(0, Math.min(width * .43, height * .43)) * zoom)
+          .rotate([-rotation[0], -rotation[1]]);
+        dirty = true;
+      }
+
+      function drawStars() {
+        let seed = 24891;
+        const random = () => {
+          seed = (seed * 16807) % 2147483647;
+          return (seed - 1) / 2147483646;
+        };
+        for (let i = 0; i < Math.round(width * height / 6400); i++) {
+          const x = random() * width;
+          const y = random() * height;
+          const radius = random() > .93 ? 1.15 : .55;
+          context.beginPath();
+          context.arc(x, y, radius, 0, Math.PI * 2);
+          context.fillStyle = `rgba(184, 213, 238, ${.16 + random() * .38})`;
+          context.fill();
+        }
+      }
+
+      function drawGlobe() {
+        context.clearRect(0, 0, width, height);
+        drawStars();
+        const radius = projection.scale();
+        const [cx, cy] = projection.translate();
+        const atmosphere = context.createRadialGradient(cx, cy, radius * .83, cx, cy, radius * 1.1);
+        atmosphere.addColorStop(0, "rgba(66, 167, 185, .10)");
+        atmosphere.addColorStop(.78, "rgba(79, 183, 196, .12)");
+        atmosphere.addColorStop(1, "rgba(86, 184, 219, 0)");
+        context.beginPath();
+        context.arc(cx, cy, radius * 1.1, 0, Math.PI * 2);
+        context.fillStyle = atmosphere;
+        context.fill();
+
+        const ocean = context.createRadialGradient(cx - radius * .32, cy - radius * .4, radius * .03, cx, cy, radius);
+        ocean.addColorStop(0, "#173d59");
+        ocean.addColorStop(.62, "#102d47");
+        ocean.addColorStop(1, "#091a2c");
+        context.beginPath();
+        context.arc(cx, cy, radius, 0, Math.PI * 2);
+        context.fillStyle = ocean;
+        context.fill();
+        context.save();
+        context.beginPath();
+        context.arc(cx, cy, radius, 0, Math.PI * 2);
+        context.clip();
+
+        context.beginPath();
+        path(graticule);
+        context.strokeStyle = "rgba(151, 197, 214, .15)";
+        context.lineWidth = .65;
+        context.stroke();
+
+        for (const country of countries) {
+          context.beginPath();
+          path(country.feature);
+          if (country === selected) {
+            context.fillStyle = "rgba(124, 224, 195, .89)";
+            context.shadowColor = "rgba(124, 224, 195, .65)";
+            context.shadowBlur = 13;
+            context.fill();
+            context.shadowBlur = 0;
+          } else if (country === hovered) {
+            context.fillStyle = "rgba(133, 184, 255, .74)";
+            context.fill();
+          } else {
+            context.fillStyle = "rgba(92, 132, 148, .82)";
+            context.fill();
+          }
+        }
+
+        context.beginPath();
+        path(borderMesh);
+        context.strokeStyle = "rgba(8, 21, 31, .8)";
+        context.lineWidth = .65;
+        context.stroke();
+
+        context.beginPath();
+        context.arc(cx, cy, radius, 0, Math.PI * 2);
+        context.strokeStyle = "rgba(135, 213, 222, .48)";
+        context.lineWidth = 1;
+        context.stroke();
+        context.restore();
+      }
+
+      function frame(timestamp) {
+        if (spinning && !dragging && timestamp - previousFrame > 48) {
+          rotation[0] = (rotation[0] + .11) % 360;
+          projection.rotate([-rotation[0], -rotation[1]]);
+          dirty = true;
+          previousFrame = timestamp;
+        }
+        if (dirty) {
+          drawGlobe();
+          dirty = false;
+        }
+        requestAnimationFrame(frame);
+      }
+
+      function hitTest(event) {
+        const bounds = canvas.getBoundingClientRect();
+        const point = projection.invert([event.clientX - bounds.left, event.clientY - bounds.top]);
+        if (!point) return null;
+        for (const country of countries) {
+          if (d3.geoContains(country.feature, point)) return country;
+        }
+        return null;
+      }
+
+      function renderEnergy(country) {
+        const record = country.facts.alpha3 ? energyData[country.facts.alpha3] : null;
+        const overview = document.getElementById("energy-overview");
+        const groups = document.getElementById("energy-groups");
+        const unavailable = document.getElementById("energy-unavailable");
+        const segments = document.getElementById("energy-donut-segments");
+        const renewableBreakdown = document.getElementById("renewable-breakdown");
+        const nonrenewableBreakdown = document.getElementById("nonrenewable-breakdown");
+        segments.replaceChildren();
+        renewableBreakdown.replaceChildren();
+        nonrenewableBreakdown.replaceChildren();
+        document.getElementById("energy-donut-value").textContent = "—";
+        document.getElementById("renewable-total").textContent = "—";
+        document.getElementById("nonrenewable-total").textContent = "—";
+        document.getElementById("renewable-group-total").textContent = "—";
+        document.getElementById("nonrenewable-group-total").textContent = "—";
+        document.getElementById("energy-donut").setAttribute("aria-label", `${country.name} energy mix data`);
+        document.getElementById("energy-method").hidden = true;
+
+        if (!record) {
+          document.getElementById("energy-total").textContent = "No data available";
+          document.getElementById("energy-year").textContent = "—";
+          overview.hidden = true;
+          groups.hidden = true;
+          unavailable.hidden = false;
+          unavailable.textContent = "No country-level primary energy consumption data is available for this territory.";
+          return;
+        }
+
+        document.getElementById("energy-total").textContent = `${Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(record.twh)} TWh`;
+        document.getElementById("energy-year").textContent = `YEAR ${record.year}`;
+        overview.hidden = !record.mix;
+        groups.hidden = !record.mix;
+        unavailable.hidden = Boolean(record.mix);
+
+        if (!record.mix) {
+          unavailable.textContent = `Total primary energy use is available for ${record.year}, but a source-by-source breakdown is not reported.`;
+          document.getElementById("energy-method").hidden = true;
+          return;
+        }
+        document.getElementById("energy-method").hidden = false;
+
+        const circumference = 2 * Math.PI * 42;
+        let offset = 0;
+        for (const item of record.mix) {
+          const color = energyColors[item.name];
+          const length = circumference * item.share;
+          if (length > 0) {
+            const segment = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            segment.setAttribute("cx", "54");
+            segment.setAttribute("cy", "54");
+            segment.setAttribute("r", "42");
+            segment.setAttribute("stroke", color);
+            segment.setAttribute("stroke-dasharray", `${length} ${circumference - length}`);
+            segment.setAttribute("stroke-dashoffset", String(-offset));
+            const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+            title.textContent = `${item.name}: ${(item.share * 100).toFixed(1)}%`;
+            segment.append(title);
+            segments.append(segment);
+          }
+          offset += length;
+
+          const row = document.createElement("div");
+          row.className = "energy-category";
+          const swatch = document.createElement("span");
+          swatch.className = "energy-swatch";
+          swatch.style.setProperty("--swatch", color);
+          const name = document.createElement("span");
+          name.className = "energy-category-name";
+          name.textContent = item.name;
+          const share = document.createElement("span");
+          share.className = "energy-category-share";
+          share.textContent = `${(item.share * 100).toFixed(1)}%`;
+          row.append(swatch, name, share);
+          (item.group === "renewable" ? renewableBreakdown : nonrenewableBreakdown).append(row);
+        }
+
+        const renewableShare = record.mix
+          .filter(item => item.group === "renewable")
+          .reduce((sum, item) => sum + item.share, 0);
+        const nonrenewableShare = 1 - renewableShare;
+        document.getElementById("energy-donut-value").textContent = `${(renewableShare * 100).toFixed(1)}%`;
+        document.getElementById("energy-donut").setAttribute("aria-label", `${country.name} primary energy mix, ${record.year}: ${(renewableShare * 100).toFixed(1)} percent renewable`);
+        document.getElementById("renewable-total").textContent = `${(renewableShare * 100).toFixed(1)}%`;
+        document.getElementById("nonrenewable-total").textContent = `${(nonrenewableShare * 100).toFixed(1)}%`;
+        document.getElementById("renewable-group-total").textContent = `${(renewableShare * 100).toFixed(1)}%`;
+        document.getElementById("nonrenewable-group-total").textContent = `${(nonrenewableShare * 100).toFixed(1)}%`;
+      }
+
+      function expandedFact(label, value, wide = false) {
+        const fact = document.createElement("div");
+        fact.className = `expanded-fact${wide ? " expanded-fact-wide" : ""}`;
+        const factLabel = document.createElement("div");
+        factLabel.className = "expanded-fact-label";
+        factLabel.textContent = label;
+        const factValue = document.createElement("div");
+        factValue.className = "expanded-fact-value";
+        factValue.textContent = value || "No data available";
+        fact.append(factLabel, factValue);
+        return fact;
+      }
+
+      function renderExpandedProfile(country) {
+        const facts = country.facts;
+        const hero = document.createElement("div");
+        hero.className = "expanded-profile-hero";
+        const flag = document.createElement("div");
+        flag.className = "expanded-profile-flag";
+        flag.textContent = facts.flag || "🌐";
+        const identity = document.createElement("div");
+        const name = document.createElement("h3");
+        name.className = "expanded-profile-name";
+        name.textContent = country.name;
+        const official = document.createElement("p");
+        official.className = "expanded-profile-official";
+        official.textContent = facts.official || country.name;
+        const region = document.createElement("span");
+        region.className = "expanded-profile-region";
+        region.textContent = [facts.region, facts.subregion].filter(Boolean).join(" · ") || country.region;
+        identity.append(name, official, region);
+        hero.append(flag, identity);
+
+        const grid = document.createElement("div");
+        grid.className = "expanded-profile-grid";
+        const population = facts.population
+          ? `${Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(facts.population)}${facts.populationYear ? ` · ${facts.populationYear}` : ""}`
+          : "";
+        const area = facts.area ? `${Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(facts.area)} km²` : "";
+        const currencies = (facts.currencies || []).map(item => [item.name, item.symbol ? `(${item.symbol})` : ""].filter(Boolean).join(" ")).join(", ");
+        grid.append(
+          expandedFact("Country code", country.code || ""),
+          expandedFact("Population", population),
+          expandedFact("Land area", area),
+          expandedFact("Capital", facts.capital),
+          expandedFact("Currency", currencies),
+          expandedFact("Languages", (facts.languages || []).join(", "), true)
+        );
+
+        const borderFact = document.createElement("div");
+        borderFact.className = "expanded-fact expanded-fact-wide";
+        const borderLabel = document.createElement("div");
+        borderLabel.className = "expanded-fact-label";
+        borderLabel.textContent = "Bordering countries";
+        const borderList = document.createElement("div");
+        borderList.className = "expanded-border-list";
+        const neighbors = (facts.borders || []).map(code => byCode.get(code)).filter(Boolean);
+        if (neighbors.length) {
+          for (const neighbor of neighbors) {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "border-chip";
+            chip.textContent = neighbor.name;
+            chip.addEventListener("click", () => chooseCountry(neighbor, true));
+            borderList.append(chip);
+          }
+        } else {
+          const empty = document.createElement("span");
+          empty.className = "section-value";
+          empty.textContent = facts.borders ? "No land borders" : "No data available";
+          borderList.append(empty);
+        }
+        borderFact.append(borderLabel, borderList);
+        grid.append(borderFact);
+        expandDialogContent.append(hero, grid);
+      }
+
+      function expandedEnergyRow(item) {
+        const row = document.createElement("div");
+        row.className = "energy-category";
+        const swatch = document.createElement("span");
+        swatch.className = "energy-swatch";
+        swatch.style.setProperty("--swatch", energyColors[item.name]);
+        const name = document.createElement("span");
+        name.className = "energy-category-name";
+        name.textContent = item.name;
+        const share = document.createElement("span");
+        share.className = "energy-category-share";
+        share.textContent = `${(item.share * 100).toFixed(1)}%`;
+        row.append(swatch, name, share);
+        return row;
+      }
+
+      function renderExpandedEnergy(country) {
+        const record = country.facts.alpha3 ? energyData[country.facts.alpha3] : null;
+        if (!record) {
+          const message = document.createElement("p");
+          message.className = "energy-unavailable";
+          message.textContent = "No country-level primary energy consumption data is available for this territory.";
+          expandDialogContent.append(message);
+          return;
+        }
+
+        const summary = document.createElement("div");
+        summary.className = "expanded-energy-summary";
+        const hero = document.createElement("div");
+        hero.className = "expanded-energy-hero";
+        const heroText = document.createElement("div");
+        const total = document.createElement("div");
+        total.className = "expanded-energy-total";
+        total.textContent = `${Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(record.twh)} TWh`;
+        const units = document.createElement("div");
+        units.className = "expanded-energy-units";
+        units.textContent = `Primary energy consumption · ${record.year}`;
+        heroText.append(total, units);
+        hero.append(heroText);
+
+        if (!record.mix) {
+          summary.append(hero);
+          expandDialogContent.append(summary);
+          const unavailable = document.createElement("p");
+          unavailable.className = "energy-unavailable";
+          unavailable.textContent = `Total primary energy use is available for ${record.year}, but a source-by-source breakdown is not reported.`;
+          expandDialogContent.append(unavailable);
+          return;
+        }
+
+        const renewableShare = record.mix.filter(item => item.group === "renewable").reduce((sum, item) => sum + item.share, 0);
+        const nonrenewableShare = 1 - renewableShare;
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.classList.add("expanded-energy-donut");
+        svg.setAttribute("viewBox", "0 0 200 200");
+        svg.setAttribute("role", "img");
+        svg.setAttribute("aria-label", `${country.name} primary energy mix, ${record.year}: ${(renewableShare * 100).toFixed(1)} percent renewable`);
+        const track = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        track.setAttribute("class", "energy-donut-track");
+        track.setAttribute("cx", "100");
+        track.setAttribute("cy", "100");
+        track.setAttribute("r", "75");
+        svg.append(track);
+        const circumference = 2 * Math.PI * 75;
+        let offset = 0;
+        for (const item of record.mix) {
+          const length = circumference * item.share;
+          if (length > 0) {
+            const segment = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            segment.setAttribute("cx", "100");
+            segment.setAttribute("cy", "100");
+            segment.setAttribute("r", "75");
+            segment.setAttribute("stroke", energyColors[item.name]);
+            segment.setAttribute("stroke-dasharray", `${length} ${circumference - length}`);
+            segment.setAttribute("stroke-dashoffset", String(-offset));
+            const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+            title.textContent = `${item.name}: ${(item.share * 100).toFixed(1)}%`;
+            segment.append(title);
+            svg.append(segment);
+          }
+          offset += length;
+        }
+        svg.querySelectorAll("circle:not(.energy-donut-track)").forEach(segment => {
+          segment.setAttribute("transform", "rotate(-90 100 100)");
+        });
+        const centerValue = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        centerValue.setAttribute("class", "energy-donut-value");
+        centerValue.setAttribute("x", "100");
+        centerValue.setAttribute("y", "98");
+        centerValue.textContent = `${(renewableShare * 100).toFixed(1)}%`;
+        const centerLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        centerLabel.setAttribute("class", "energy-donut-label");
+        centerLabel.setAttribute("x", "100");
+        centerLabel.setAttribute("y", "116");
+        centerLabel.textContent = "RENEWABLE";
+        svg.append(centerValue, centerLabel);
+
+        const totals = document.createElement("div");
+        totals.className = "expanded-energy-totals";
+        for (const item of [
+          { name: "Renewable", share: renewableShare, color: "#49c7a2" },
+          { name: "Non-renewable", share: nonrenewableShare, color: "#708198" }
+        ]) {
+          const card = document.createElement("div");
+          card.className = "expanded-energy-total-card";
+          const label = document.createElement("span");
+          label.className = "energy-total-name";
+          const swatch = document.createElement("span");
+          swatch.className = "energy-swatch";
+          swatch.style.setProperty("--swatch", item.color);
+          label.append(swatch, document.createTextNode(item.name));
+          const value = document.createElement("strong");
+          value.className = "energy-total-value";
+          value.textContent = `${(item.share * 100).toFixed(1)}%`;
+          card.append(label, value);
+          totals.append(card);
+        }
+        summary.append(svg, totals);
+        expandDialogContent.append(summary);
+
+        const breakdown = document.createElement("div");
+        breakdown.className = "expanded-energy-breakdown";
+        for (const [group, title, share] of [
+          ["renewable", "Renewables", renewableShare],
+          ["nonrenewable", "Non-renewables", nonrenewableShare]
+        ]) {
+          const section = document.createElement("section");
+          section.className = "expanded-energy-group";
+          const heading = document.createElement("div");
+          heading.className = "energy-group-title";
+          const headingName = document.createElement("span");
+          headingName.textContent = title;
+          const headingShare = document.createElement("strong");
+          headingShare.textContent = `${(share * 100).toFixed(1)}%`;
+          heading.append(headingName, headingShare);
+          const rows = document.createElement("div");
+          rows.className = "energy-category-list";
+          record.mix.filter(item => item.group === group).forEach(item => rows.append(expandedEnergyRow(item)));
+          section.append(heading, rows);
+          breakdown.append(section);
+        }
+        expandDialogContent.append(breakdown);
+
+        const note = document.createElement("p");
+        note.className = "expanded-energy-note";
+        note.textContent = "Fuel shares are percentages of reported primary-energy use, not electricity generation. Nuclear is grouped as non-renewable. ";
+        const source = document.createElement("a");
+        source.href = "https://github.com/owid/energy-data";
+        source.target = "_blank";
+        source.rel = "noreferrer";
+        source.textContent = "Our World in Data energy dataset";
+        note.append(source);
+        expandDialogContent.append(note);
+      }
+
+      function renderExpandedView(mode) {
+        if (!mode) return;
+        const country = selected;
+        expandDialogContent.replaceChildren();
+        document.getElementById("expand-dialog-kicker").textContent = mode === "energy" ? "Expanded energy view" : "Expanded country profile";
+        document.getElementById("expand-dialog-title").textContent = country.name;
+        document.getElementById("expand-dialog-subtitle").textContent = mode === "energy"
+          ? "Primary energy consumption and source breakdown"
+          : [country.facts.region, country.facts.subregion].filter(Boolean).join(" · ") || country.region;
+        if (mode === "energy") renderExpandedEnergy(country);
+        else renderExpandedProfile(country);
+      }
+
+      function openExpandedView(mode) {
+        expandedMode = mode;
+        renderExpandedView(mode);
+        if (!expandDialog.open) expandDialog.showModal();
+      }
+
+      function updateDetails(country) {
+        if (!country) return;
+        selected = country;
+        const facts = country.facts;
+        document.getElementById("detail-code").textContent = country.code || "—";
+        document.getElementById("hero-flag").textContent = facts.flag || "🌐";
+        document.getElementById("hero-name").textContent = country.name;
+        document.getElementById("hero-official").textContent = facts.official || country.name;
+        const tag = document.getElementById("region-tag");
+        tag.textContent = [facts.region, facts.subregion].filter(Boolean).join(" · ") || country.region;
+        tag.hidden = false;
+        document.getElementById("population").textContent = facts.population ? `${Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(facts.population)}${facts.populationYear ? ` · ${facts.populationYear}` : ""}` : "—";
+        document.getElementById("area").textContent = facts.area ? `${Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(facts.area)} km²` : "—";
+        document.getElementById("capital").textContent = facts.capital || "—";
+        renderEnergy(country);
+        const currency = (facts.currencies || []).map(item => [item.name, item.symbol ? `(${item.symbol})` : ""].filter(Boolean).join(" ")).join(", ");
+        document.getElementById("currency").textContent = currency || "—";
+        document.getElementById("languages").textContent = (facts.languages || []).join(", ") || "—";
+        const borders = document.getElementById("borders");
+        borders.replaceChildren();
+        const neighbors = (facts.borders || []).map(code => byCode.get(code)).filter(Boolean);
+        if (neighbors.length) {
+          for (const neighbor of neighbors) {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "border-chip";
+            chip.textContent = neighbor.name;
+            chip.addEventListener("click", () => {
+              chooseCountry(neighbor, true);
+            });
+            borders.append(chip);
+          }
+        } else {
+          const empty = document.createElement("span");
+          empty.className = "section-value";
+          empty.textContent = facts.borders ? "No land borders" : "No data available";
+          borders.append(empty);
+        }
+        updateCountryRows();
+        if (expandDialog.open) renderExpandedView(expandedMode);
+        dirty = true;
+      }
+
+      function updateCountryRows() {
+        const query = searchInput.value.trim().toLocaleLowerCase();
+        const region = regionFilter.value;
+        const filtered = countries.filter(country =>
+          country.name.toLocaleLowerCase().includes(query) &&
+          (!region || country.region === region || country.facts.subregion === region)
+        );
+        document.getElementById("country-count").textContent = `${filtered.length} / ${countries.length}`;
+        countryList.replaceChildren();
+        if (!filtered.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty-state";
+          empty.textContent = "No countries match your search.";
+          countryList.append(empty);
+          return;
+        }
+        for (const country of filtered) {
+          const row = document.createElement("button");
+          row.type = "button";
+          row.className = `country-row${country === selected ? " active" : ""}`;
+          row.setAttribute("role", "option");
+          row.setAttribute("aria-selected", String(country === selected));
+          const flag = document.createElement("span");
+          flag.className = "row-flag";
+          flag.textContent = country.facts.flag || "🌐";
+          const copy = document.createElement("span");
+          copy.className = "row-copy";
+          const name = document.createElement("span");
+          name.className = "row-name";
+          name.textContent = country.name;
+          const regionLabel = document.createElement("span");
+          regionLabel.className = "row-region";
+          regionLabel.textContent = country.region;
+          const code = document.createElement("span");
+          code.className = "row-code";
+          code.textContent = country.code;
+          copy.append(name, regionLabel);
+          row.append(flag, copy, code);
+          row.addEventListener("click", () => chooseCountry(country, true));
+          countryList.append(row);
+        }
+      }
+
+      function chooseCountry(country, center) {
+        if (!country) return;
+        updateDetails(country);
+        if (center) {
+          spinning = false;
+          updateSpinButton();
+          const centroid = d3.geoCentroid(country.feature);
+          rotation[0] = centroid[0];
+          rotation[1] = centroid[1];
+          projection.rotate([-rotation[0], -rotation[1]]);
+          dirty = true;
+        }
+      }
+
+      function updateSpinButton() {
+        const button = document.getElementById("spin-toggle");
+        button.classList.toggle("active", spinning);
+        button.setAttribute("aria-pressed", String(spinning));
+        document.getElementById("spin-label").textContent = spinning ? "Spin on" : "Spin off";
+      }
+
+      function zoomBy(factor) {
+        zoom = Math.max(.7, Math.min(1.55, zoom * factor));
+        resize();
+      }
+
+      regionNames.forEach(region => {
+        const option = document.createElement("option");
+        option.value = region;
+        option.textContent = region;
+        regionFilter.append(option);
+      });
+      searchInput.addEventListener("input", updateCountryRows);
+      regionFilter.addEventListener("change", updateCountryRows);
+      document.getElementById("expand-country").addEventListener("click", () => openExpandedView("country"));
+      document.getElementById("expand-energy").addEventListener("click", () => openExpandedView("energy"));
+      document.getElementById("expand-dialog-close").addEventListener("click", () => expandDialog.close());
+      expandDialog.addEventListener("click", event => {
+        if (event.target === expandDialog) expandDialog.close();
+      });
+      expandDialog.addEventListener("close", () => {
+        expandedMode = null;
+      });
+      document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && expandDialog.open) expandDialog.close();
+      });
+      document.getElementById("zoom-in").addEventListener("click", () => zoomBy(1.16));
+      document.getElementById("zoom-out").addEventListener("click", () => zoomBy(1 / 1.16));
+      document.getElementById("reset-view").addEventListener("click", () => {
+        zoom = 1;
+        rotation[0] = defaultRotation[0];
+        rotation[1] = defaultRotation[1];
+        resize();
+      });
+      document.getElementById("spin-toggle").addEventListener("click", () => {
+        spinning = !spinning;
+        updateSpinButton();
+      });
+      canvas.addEventListener("wheel", event => {
+        event.preventDefault();
+        zoomBy(event.deltaY < 0 ? 1.08 : 1 / 1.08);
+      }, { passive: false });
+      canvas.addEventListener("pointerdown", event => {
+        dragging = true;
+        movedDuringDrag = false;
+        pointer = [event.clientX, event.clientY];
+        canvas.setPointerCapture(event.pointerId);
+        canvas.classList.add("dragging");
+      });
+      canvas.addEventListener("pointermove", event => {
+        if (dragging && pointer) {
+          const dx = event.clientX - pointer[0];
+          const dy = event.clientY - pointer[1];
+          if (Math.abs(dx) + Math.abs(dy) > 3) movedDuringDrag = true;
+          rotation[0] -= dx * .34;
+          rotation[1] = Math.max(-80, Math.min(80, rotation[1] + dy * .34));
+          projection.rotate([-rotation[0], -rotation[1]]);
+          pointer = [event.clientX, event.clientY];
+          dirty = true;
+          return;
+        }
+        const country = hitTest(event);
+        if (country !== hovered) {
+          hovered = country;
+          canvas.classList.toggle("country-hover", Boolean(country));
+          dirty = true;
+        }
+        if (country) {
+          tooltip.textContent = country.name;
+          tooltip.style.display = "block";
+          const stageBounds = canvas.parentElement.getBoundingClientRect();
+          tooltip.style.left = `${event.clientX - stageBounds.left}px`;
+          tooltip.style.top = `${event.clientY - stageBounds.top}px`;
+        } else {
+          tooltip.style.display = "none";
+        }
+      });
+      function endDrag() {
+        if (dragging) {
+          dragging = false;
+          pointer = null;
+          canvas.classList.remove("dragging");
+        }
+      }
+      canvas.addEventListener("pointerup", endDrag);
+      canvas.addEventListener("pointercancel", endDrag);
+      canvas.addEventListener("click", event => {
+        if (movedDuringDrag) {
+          movedDuringDrag = false;
+          return;
+        }
+        if (dragging) return;
+        chooseCountry(hitTest(event), false);
+      });
+      canvas.addEventListener("pointerleave", () => {
+        tooltip.style.display = "none";
+        if (hovered) {
+          hovered = null;
+          canvas.classList.remove("country-hover");
+          dirty = true;
+        }
+      });
+      window.addEventListener("resize", resize);
+      updateCountryRows();
+      updateDetails(selected);
+      resize();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
